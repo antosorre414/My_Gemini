@@ -1722,36 +1722,64 @@ if prompt:
                 # =========================================================
                 # --- 3. INVIO (ORA È FUORI DAGLI IF/ELSE ED È ESEGUITO SEMPRE) ---
                 # =========================================================
+                # =========================================================
+                # --- 3. INVIO & RENDER (VERSIONE BLINDATA) ---
+                # =========================================================
                 chat = model.start_chat(history=final_history)
                 
                 payload_api = []
                 if images_list: payload_api.extend(images_list)
                 payload_api.append(final_prompt_to_send)
                 
-                response_stream = chat.send_message(payload_api, stream=True)
-
-                # --- RENDER RISPOSTA ---
+                # Container per la risposta
                 with st.chat_message("assistant", avatar=IMG_TRASPARENTE):
+                    # Marker per il CSS
                     st.markdown('<div data-role="assistant" style="display:none;"></div>', unsafe_allow_html=True)
-                    ph = st.empty()
+                    
+                    # Creiamo il placeholder PRIMA di iniziare lo stream
+                    message_placeholder = st.empty()
                     full_resp = ""
-                    for chunk in response_stream:
-                        if chunk.text:
-                            full_resp += chunk.text
-                            ph.markdown(full_resp + "▌")
-                    ph.markdown(full_resp)
+                    
+                    try:
+                        # Avvia lo stream
+                        response_stream = chat.send_message(payload_api, stream=True)
+                        
+                        # Ciclo di lettura robusto
+                        for chunk in response_stream:
+                            # 1. Verifica se il chunk è valido e contiene parti
+                            if chunk.candidates and chunk.candidates[0].content.parts:
+                                try:
+                                    # Prova a estrarre il testo
+                                    chunk_text = chunk.text
+                                    full_resp += chunk_text
+                                    # Aggiorna a schermo con cursore
+                                    message_placeholder.markdown(full_resp + "▌")
+                                except ValueError:
+                                    # Se chunk.text fallisce (capita con i safety filter), lo ignoriamo e continuiamo
+                                    pass
+                        
+                        # 2. Aggiornamento finale (toglie il cursore)
+                        message_placeholder.markdown(full_resp)
+                        
+                        # 3. Se la risposta è vuota (es. blocco totale sicurezza), avvisa
+                        if not full_resp:
+                            message_placeholder.warning("⚠️ L'AI ha generato una risposta vuota (possibile blocco di sicurezza).")
 
-                st.session_state.messages.append({"role": "assistant", "content": full_resp, "pinned": False})
-                
-                # --- CALCOLO COSTI ---
-                try:
-                    # Conta input history (0 se compresso, N se raw) + input prompt (riassunto se compresso, breve se raw)
-                    t_input = model.count_tokens(final_history).total_tokens + model.count_tokens(final_prompt_to_send).total_tokens
-                    t_output = model.count_tokens(full_resp).total_tokens
-                    registra_costo(st.session_state.current_chat_name, model_id, manual_in=t_input, manual_out=t_output)
-                except: pass
+                        # 4. Salvataggio in memoria
+                        st.session_state.messages.append({"role": "assistant", "content": full_resp, "pinned": False})
+                        
+                        # 5. Calcolo Costi
+                        try:
+                            t_input = model.count_tokens(final_history).total_tokens + model.count_tokens(final_prompt_to_send).total_tokens
+                            t_output = model.count_tokens(full_resp).total_tokens
+                            registra_costo(st.session_state.current_chat_name, model_id, manual_in=t_input, manual_out=t_output)
+                        except: pass
 
-            # --- CHIUSURA COMUNE ---
+                    except Exception as e_gen:
+                        message_placeholder.error(f"Errore stream: {e_gen}")
+                        print(f"DEBUG ERROR: {e_gen}") # Scrive nel terminale per debug
+
+            # --- CHIUSURA COMUNE (Fuori dall'else) ---
             salva_chat(st.session_state.current_chat_name, st.session_state.messages)
         except Exception as e:
             stop_placeholder.empty()
@@ -1798,5 +1826,6 @@ with st.sidebar:
         """, 
         unsafe_allow_html=True
     )
+
 
 
