@@ -1066,7 +1066,7 @@ with st.sidebar:
 
        # ... dentro QUADRANTE 3 ...
         
-        memory_limit = st.number_input("⚡ Context Window (Msg)", min_value=0, max_value=100, value=10, help="Numero di messaggi passati da ricordare")
+        memory_limit = st.number_input("⚡ Context Window (Msg)", min_value=0, max_value=100, value=5, help="Numero di messaggi passati da ricordare")
         
         # --- NUOVO TOGGLE ---
         st.session_state.use_smart_rag = st.toggle("🧠 Compressione Lite", value=True, help="ON: Il modello Lite riassume la storia (Risparmio Token)\nOFF: Invia i messaggi grezzi (Massima Fedeltà)")
@@ -1798,4 +1798,5 @@ with st.sidebar:
         """, 
         unsafe_allow_html=True
     )
+
 
